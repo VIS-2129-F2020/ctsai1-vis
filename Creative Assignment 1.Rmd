@@ -1,0 +1,215 @@
+---
+title: "Creative Assignment 1"
+author: "Jocelyn Tsai"
+date: "9/12/2020"
+output: html_document
+---
+```{r, message=FALSE}
+library(ggplot2)
+library(tidyverse)
+library(tidycensus)
+```
+
+I decided to use data from the 2010 Census for this assignment. I first loaded all the available variables in the census to see which variables I am interested in picking.
+```{r}
+Census2010_variables<- load_variables(2010, "sf1", cache = TRUE)
+
+View(Census2010_variables)
+```
+
+I ended up choosing the same variables as Professor Voulgaris's written tutorial because I wanted to spend more time on experimenting with ggplot. I used census tract data from Alameda County in California, from the 2010 Census. 
+
+The six variables used are:
+  1. Whether the census tract is rural or not (categorical): rural
+  2. Percentage of household in rented homes (continuous): pct_rental
+  3. The majority race/ethnicity (categorical): majority_race_eth
+  4. Average household size (continuous): avg_hh_size
+  5. Total tract population (continuous): tot_pop
+  6. Tract residents' median age (continuous): med_age
+
+```{r, message=FALSE}
+vars <- c(tot_hh = "H001001",
+         tot_rural_hh = "H002005",
+         tot_rent_hh = "H004004",
+         avg_hh_size = "H012001",
+         tot_pop = "P003001",
+         nh_white_pop = "P005003",
+         nh_black_pop = "P005004",
+         nh_asian_pop = "P005006",
+         hispanic_pop = "P005010",
+         med_age = "P013001")
+
+Alameda_tracts <- get_decennial(geography = "tract", variables = vars,
+                           state = "CA", county = "Alameda",
+                           output = "wide") %>%
+  
+  mutate(rural = (tot_rural_hh == tot_hh) ,
+         pct_rental = tot_rent_hh / tot_hh,
+         majority_race_eth = case_when(
+           nh_white_pop / tot_pop > 0.5 ~ "nh_white",
+           nh_black_pop / tot_pop > 0.5 ~ "nh_black",
+           nh_asian_pop / tot_pop > 0.5 ~ "nh_asian",
+           hispanic_pop / tot_pop > 0.5 ~ "hispanic",
+           (nh_white_pop + nh_black_pop + nh_asian_pop + hispanic_pop) /
+             tot_pop < 0.5 ~ "other",
+           TRUE ~ "None")) %>%
+  
+  filter(tot_pop > 0, tot_hh > 0) %>%
+  
+  select(GEOID, rural, majority_race_eth, 
+         pct_rental, avg_hh_size, tot_pop, med_age) 
+```
+
+```{r}
+ggplot(Alameda_tracts, 
+       aes(x = pct_rental,
+           y = med_age)) +
+  geom_point() +
+  scale_x_continuous(name = "Percent of Households in Rented Homes",
+                     breaks = seq(0, 1, by = 0.1),
+                     labels = paste(seq(0, 100, by = 10), "%", sep = "")) +
+  scale_y_continuous(name = "Tract Residents' Median Age",
+                     breaks = seq(10, 100, by = 10)) +
+  stat_smooth(method = "lm")
+  theme_bw()+
+  theme(legend.position = "none")
+```
+```{r}
+ggplot(Alameda_tracts, 
+       aes(x = majority_race_eth,
+           y = avg_hh_size,
+           color = majority_race_eth)) +
+  geom_point(position = "jitter",
+             size = 0.7,
+             alpha = 0.8) +
+  scale_x_discrete(name = "Majority Race/Ethnicity",
+                       labels = c("Hispanic",
+                                  "Non-Hispanic Asian",
+                                  "Non-Hispanic white",
+                                  "No majority")) +
+  scale_y_continuous(name = "Average Household Size") +
+  theme_bw() +
+  theme(legend.position = "none")
+```
+```{r}
+ggplot(Alameda_tracts, 
+       aes(x = majority_race_eth,
+           y = pct_rental,
+           color = majority_race_eth)) +
+  geom_boxplot() +
+  scale_x_discrete(name = "Majority race/ethnicity",
+                       labels = c("Hispanic",
+                                  "Non-Hispanic Asian",
+                                  "Non-Hispanic white",
+                                  "No majority")) +
+  scale_y_continuous(name = "Percent of Households in Rented Homes",
+                     breaks = seq(0, 1, by = 0.1),
+                     labels = paste(seq(0, 100, by = 10), "%", sep = "")) +
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+type \n in between legend titles to switch lines
+problem with this graph is that I can't tell if the darker black circles from a larger Average Household Size or just because the circles are overlapping, which makes it darker.
+
+```{r}
+ggplot(Alameda_tracts, 
+       aes(x = med_age,
+           y = tot_pop,
+           size = pct_rental,
+           alpha = avg_hh_size)) +
+  geom_point() +
+  scale_x_continuous(name = "Tract Median Age",
+                     breaks = seq(10, 80, by = 10)) +
+  scale_y_continuous(name = "Total Tract Population") +
+  scale_size_continuous(name = "Percent Households\nin Rentals",
+                    breaks = seq(0, 1, by = 0.1),
+                    labels = paste(seq(0, 100, by = 10), "%", sep = "")) +
+  scale_alpha_continuous(name = "Average Tract\nHousehold Size") +
+  theme_bw() +
+  theme(legend.key.size = unit(0.05, "cm"))
+```
+
+I found out that there's no rural tracts in Alameda County because all the fill in the bar chart is the same color. 
+
+```{r}
+ggplot(Alameda_tracts, 
+       aes(y = majority_race_eth, fill = rural)) +
+  geom_bar() +
+  scale_y_discrete(name = "Majority Race/Ethnicity",
+                       labels = c("Hispanic",
+                                  "Non-Hispanic\nAsian",
+                                  "Non-Hispanic\nwhite",
+                                  "No majority")) +
+  scale_x_continuous(name = "Number of tracts") +
+  scale_fill_discrete(name = "Urban or Rural Tracts",
+                        labels = c("Urban tracts",
+                                   "Rural tracts")) +
+  theme_bw() 
+```
+
+```{r}
+ggplot(Alameda_tracts, 
+       aes(x = majority_race_eth,
+           y = avg_hh_size,
+           color = majority_race_eth)) +
+  geom_violin() +
+  scale_x_discrete(name = "Majority Race/Ethnicity",
+                       labels = c("Hispanic",
+                                  "Non-Hispanic Asian",
+                                  "Non-Hispanic white",
+                                  "No majority")) +
+  scale_y_continuous(name = "Average Household Size") +
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+```{r}
+ggplot(Alameda_tracts, 
+       aes(x = tot_pop,
+           y = majority_race_eth,    
+           color = majority_race_eth)) +
+  geom_violin() +
+  geom_point(position = "jitter",
+             alpha = 0.7,
+             size = 0.7) +
+  scale_x_continuous(name = "Total Population within tract") +
+  scale_y_discrete(name = "Majority race/ethnicity",
+                       labels = c("Hispanic",
+                                  "Non-Hispanic Asian",
+                                  "Non-Hispanic white",
+                                  "No majority")) +
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+```{r}
+ggplot(Alameda_tracts, 
+       aes(y = rural,
+           x = med_age)) +
+  geom_point() +
+  scale_y_discrete(name = "Urban or Rural Tracts",
+                       labels = c("Urban Tracts",
+                                  "Rural Tracts")) +
+  scale_x_continuous(name = "Tract Median age",
+                     breaks = seq(10, 100, by = 5)) +
+  theme_bw() 
+```
+
+```{r}
+ggplot(Alameda_tracts, 
+       aes(x = med_age,
+           y = pct_rental)) +
+  geom_point(alpha = 0.5, size = 0.5) +
+  stat_smooth(color = "purple", linetype = 1, size = 0.8) +
+  scale_x_continuous(name = "Tract Median Age",
+                     labels = c("100 or 0", "10", "20", "30", "40", "50", 
+                                "60", "70", "80", "90", "100"),
+                     breaks = seq(0, 100, by = 10)) +
+  scale_y_continuous(name = "Percent Households in Rentals",
+                     breaks = seq(0, 1, by = 0.1),
+                     labels = paste(seq(0, 100, by = 10), "%", sep = "")) +
+  coord_polar(theta = "x") +
+  theme_bw() 
+```
+
