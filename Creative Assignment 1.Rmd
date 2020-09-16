@@ -8,18 +8,14 @@ output: html_document
 library(ggplot2)
 library(tidyverse)
 library(tidycensus)
+library(viridis)
 ```
 
-I decided to use data from the 2010 Census for this assignment. I first loaded all the available variables in the census to see which variables I am interested in picking.
-```{r}
-Census2010_variables<- load_variables(2010, "sf1", cache = TRUE)
-
-View(Census2010_variables)
-```
-
-I ended up choosing the same variables as Professor Voulgaris's written tutorial because I wanted to spend more time on experimenting with ggplot. I used census tract data from Alameda County in California, from the 2010 Census. 
+## Variables Used
+I used the same variables as Professor Voulgaris's written tutorial because I wanted to spend more time on experimenting with ggplot. I used census tract data from Alameda County in California, from the 2010 Census. 
 
 The six variables used are:
+
   1. Whether the census tract is rural or not (categorical): rural
   2. Percentage of household in rented homes (continuous): pct_rental
   3. The majority race/ethnicity (categorical): majority_race_eth
@@ -27,6 +23,7 @@ The six variables used are:
   5. Total tract population (continuous): tot_pop
   6. Tract residents' median age (continuous): med_age
 
+## Loading the 2010 Census data for Alameda County, California
 ```{r, message=FALSE}
 vars <- c(tot_hh = "H001001",
          tot_rural_hh = "H002005",
@@ -60,7 +57,12 @@ Alameda_tracts <- get_decennial(geography = "tract", variables = vars,
          pct_rental, avg_hh_size, tot_pop, med_age) 
 ```
 
-```{r}
+## Plot 1
+### Scatter plot with trendline of percent household in rental homes and residents' median age 
+
+I set a linear trendline through the scatter plot by specifying method="lm". This more clearly tells the relationship of the two variables comparing to simple scatter plots.
+
+```{r, message=FALSE}
 ggplot(Alameda_tracts, 
        aes(x = pct_rental,
            y = med_age)) +
@@ -70,17 +72,23 @@ ggplot(Alameda_tracts,
                      labels = paste(seq(0, 100, by = 10), "%", sep = "")) +
   scale_y_continuous(name = "Tract Residents' Median Age",
                      breaks = seq(10, 100, by = 10)) +
-  stat_smooth(method = "lm")
-  theme_bw()+
+  stat_smooth(method = "lm")+
+  theme_light()+
   theme(legend.position = "none")
 ```
-```{r}
+
+## Plot 2
+### Scatter plot of Majority race/ ethnicity and average household size
+
+There are points that are categorized as N/A probably because some residents declined to answer that portion of the census. I learned during small group discussion that the labels should be organized according to alphabetical order of the variable names. 
+
+```{r, message=FALSE}
 ggplot(Alameda_tracts, 
        aes(x = majority_race_eth,
            y = avg_hh_size,
            color = majority_race_eth)) +
   geom_point(position = "jitter",
-             size = 0.7,
+             size = 2,
              alpha = 0.8) +
   scale_x_discrete(name = "Majority Race/Ethnicity",
                        labels = c("Hispanic",
@@ -91,7 +99,13 @@ ggplot(Alameda_tracts,
   theme_bw() +
   theme(legend.position = "none")
 ```
-```{r}
+
+## Plot 3
+### Box plot of majority race/ethnicity and percent of household in rented homes
+
+The bottom labels were originally crammed together, so I typed \n in between the label names to switch lines. There are not many outliers in the data because only the box for "Hispanic" has dots for outliers. 
+
+```{r, message=FALSE}
 ggplot(Alameda_tracts, 
        aes(x = majority_race_eth,
            y = pct_rental,
@@ -99,8 +113,8 @@ ggplot(Alameda_tracts,
   geom_boxplot() +
   scale_x_discrete(name = "Majority race/ethnicity",
                        labels = c("Hispanic",
-                                  "Non-Hispanic Asian",
-                                  "Non-Hispanic white",
+                                  "Non-Hispanic\n Asian",
+                                  "Non-Hispanic\n White",
                                   "No majority")) +
   scale_y_continuous(name = "Percent of Households in Rented Homes",
                      breaks = seq(0, 1, by = 0.1),
@@ -109,16 +123,18 @@ ggplot(Alameda_tracts,
   theme(legend.position = "none")
 ```
 
-type \n in between legend titles to switch lines
-problem with this graph is that I can't tell if the darker black circles from a larger Average Household Size or just because the circles are overlapping, which makes it darker.
+## Plot 4
+### Scatter plot of median age, total population, percent rental, and average household size. 
 
-```{r}
+This graph is showing too much information at once. A problem is that I can't tell if the darker colored circles are from a larger Average Household Size or just because the circles are overlapping, which makes it darker.
+
+```{r, message=FALSE}
 ggplot(Alameda_tracts, 
        aes(x = med_age,
            y = tot_pop,
            size = pct_rental,
            alpha = avg_hh_size)) +
-  geom_point() +
+  geom_point(color ="orange") +
   scale_x_continuous(name = "Tract Median Age",
                      breaks = seq(10, 80, by = 10)) +
   scale_y_continuous(name = "Total Tract Population") +
@@ -126,13 +142,16 @@ ggplot(Alameda_tracts,
                     breaks = seq(0, 1, by = 0.1),
                     labels = paste(seq(0, 100, by = 10), "%", sep = "")) +
   scale_alpha_continuous(name = "Average Tract\nHousehold Size") +
-  theme_bw() +
+  theme_light() +
   theme(legend.key.size = unit(0.05, "cm"))
 ```
 
+## Plot 5
+### Bar chart of whether a tract is rural
+
 I found out that there's no rural tracts in Alameda County because all the fill in the bar chart is the same color. 
 
-```{r}
+```{r, message=FALSE}
 ggplot(Alameda_tracts, 
        aes(y = majority_race_eth, fill = rural)) +
   geom_bar() +
@@ -145,26 +164,48 @@ ggplot(Alameda_tracts,
   scale_fill_discrete(name = "Urban or Rural Tracts",
                         labels = c("Urban tracts",
                                    "Rural tracts")) +
-  theme_bw() 
+  theme_minimal() 
 ```
 
-```{r}
+## Plot 6
+### Heat map of majority race/ethnicity and tract total population
+
+I can barely see the tiles on this graph because my y-axis is a continuous instead of categorical variable, so the height of each tile is too small since there are too many possibilities for tract total population. 
+
+```{r, message=FALSE}
 ggplot(Alameda_tracts, 
-       aes(x = majority_race_eth,
-           y = avg_hh_size,
-           color = majority_race_eth)) +
-  geom_violin() +
+       aes(x = majority_race_eth, y = tot_pop, fill = rural)) +
+  geom_tile() +
   scale_x_discrete(name = "Majority Race/Ethnicity",
                        labels = c("Hispanic",
-                                  "Non-Hispanic Asian",
-                                  "Non-Hispanic white",
+                                  "Non-Hispanic\nAsian",
+                                  "Non-Hispanic\nwhite",
                                   "No majority")) +
-  scale_y_continuous(name = "Average Household Size") +
-  theme_bw() +
-  theme(legend.position = "none")
+  scale_y_continuous(name = "Tract Total Population") +
+  scale_fill_discrete(name = "Urban or Rural Tracts",
+                        labels = c("Urban tracts",
+                                   "Rural tracts")) +
+  theme_light() 
 ```
 
-```{r}
+## Plot 7
+### Area chart of total population in tract
+
+I tried using Hex Colors to emphasize the curve and the area beneath. 
+
+```{r, message=FALSE}
+ggplot(Alameda_tracts, aes(x=tot_pop)) +
+  geom_density(fill="#8df2eb", color="#5884d6", alpha=0.5) +
+  scale_x_continuous(name = "Total Population in Tract") +
+  theme_classic()
+```
+
+## Plot 8
+### Violin plot with scatter plot of total tract population and majority race/ethnicity
+
+This violin plot with a scatter plot on top is a little more informative than the regular violin plot because it's easier to understand why the violin boxed area is shaped the way it is. position = "jitter" helps spread out the dots so they're not crammed together. 
+
+```{r, message=FALSE}
 ggplot(Alameda_tracts, 
        aes(x = tot_pop,
            y = majority_race_eth,    
@@ -179,29 +220,42 @@ ggplot(Alameda_tracts,
                                   "Non-Hispanic Asian",
                                   "Non-Hispanic white",
                                   "No majority")) +
-  theme_bw() +
+  theme_light() +
   theme(legend.position = "none")
 ```
 
-```{r}
+## Plot 9
+### Scatter plot of median age and rural or urban tracts
+
+Since there are only urban tracts in this dataset, this graph is less informative, but it still shows the general distribution and outliers of the tract median age. Up until this point I didn't realize that there is a coord_flip() function that would flip the x and y coordinates without me manually changing it in the code. I learned this from Emma during our discussion. 
+
+```{r, message=FALSE}
 ggplot(Alameda_tracts, 
-       aes(y = rural,
-           x = med_age)) +
-  geom_point() +
-  scale_y_discrete(name = "Urban or Rural Tracts",
+       aes(x = rural,
+           y = med_age)) +
+  geom_point(alpha = 0.5,
+             size = 1.5,
+             color ="blue") +
+  scale_x_discrete(name = "Urban or Rural Tracts",
                        labels = c("Urban Tracts",
                                   "Rural Tracts")) +
-  scale_x_continuous(name = "Tract Median age",
+  scale_y_continuous(name = "Tract Median age",
                      breaks = seq(10, 100, by = 5)) +
-  theme_bw() 
+  theme_bw()+ 
+coord_flip()
 ```
 
-```{r}
+## Plot 10
+### Scatter plot with polar coordinate system of median age and percent rental
+
+Even though I typed in the labels "10","20","30" etc, it is still not showing on my graph for some reason. I added a line smoothing all of the scattered dots to more clearly see the change in percentage of households rentals in relation to the different tract median ages. I found out that R has a list of defined colors represented as a string from this website: http://sape.inf.usi.ch/quick-reference/ggplot2/colour so I tried using "magenta4" to see if the line actually changes colors accordingly. 
+
+```{r, message=FALSE}
 ggplot(Alameda_tracts, 
        aes(x = med_age,
            y = pct_rental)) +
   geom_point(alpha = 0.5, size = 0.5) +
-  stat_smooth(color = "purple", linetype = 1, size = 0.8) +
+  stat_smooth(color = "magenta4", linetype = 1, size = 0.8) +
   scale_x_continuous(name = "Tract Median Age",
                      labels = c("100 or 0", "10", "20", "30", "40", "50", 
                                 "60", "70", "80", "90", "100"),
@@ -210,6 +264,11 @@ ggplot(Alameda_tracts,
                      breaks = seq(0, 1, by = 0.1),
                      labels = paste(seq(0, 100, by = 10), "%", sep = "")) +
   coord_polar(theta = "x") +
-  theme_bw() 
+  theme_minimal() 
 ```
+
+
+
+
+
 
