@@ -1,0 +1,237 @@
+---
+title: "Creative Assignment 2"
+author: "Jocelyn Tsai"
+date: "9/20/2020"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+```{r, message=FALSE}
+library(ggplot2)
+library(sf)
+library(rnaturalearth)
+library(tidyverse)
+library(ggspatial)
+library(cartogram)
+library(ggthemes)
+library(rnaturalearthhires)
+library(rgeos)
+```
+
+World Map
+
+```{r}
+world <- ne_countries(scale = 50, returnclass = "sf") 
+
+world_map <- ggplot(world) +
+  geom_sf() +
+  theme_bw()
+
+world_map
+```
+
+## Countries in Europe
+
+### Map of countries in Europe in equirectangular projection:
+
+```{r}
+eu_countries <- world %>%
+  filter(continent == "Europe") 
+
+eu_map <- ggplot(eu_countries) +
+  geom_sf() + 
+  theme_bw()
+
+eu_map
+```
+
+
+
+### Reprojecting Map Data for Countries in Europe:
+
+I loaded 3 projections and mapped them out:
+
+1. WRF Lambert Conformal Conic
+https://spatialreference.org/ref/sr-org/29/
+
+2. France EuroLambert 
+https://spatialreference.org/ref/epsg/2192/
+
+3. North Pole LAEA Europe
+https://spatialreference.org/ref/epsg/3575/
+
+```{r}
+WRF_lambert_conformal_conic <- "+proj=lcc +lat_1=33 +lat_2=45 +lat_0=40 +lon_0=-97 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
+france_eurolambert <- "+proj=lcc +lat_1=46.8 +lat_0=46.8 +lon_0=2.337229166666667 +k_0=0.99987742 +x_0=600000 +y_0=2200000 +ellps=intl +units=m +no_defs"
+north_pole_eu <- "+proj=laea +lat_0=90 +lon_0=10 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
+```
+
+1. WRF Lambert Conformal Conic Projection:
+
+```{r}
+ggplot(eu_countries) +
+  geom_sf() +
+  coord_sf(crs = WRF_lambert_conformal_conic) +
+  theme_bw()
+```
+
+2. France EuroLambert Projection:
+
+```{r}
+ggplot(eu_countries) +
+  geom_sf() +
+  coord_sf(crs = france_eurolambert) +
+  theme_bw()
+```
+
+3. North Pole LAEA Europe Projection:
+
+```{r}
+ggplot(eu_countries) +
+  geom_sf() +
+  coord_sf(crs = north_pole_eu) +
+  theme_bw()
+```
+
+
+### Transforming Coordinate Systems 
+
+I used the st_transform() function to store data in a projected coordinate system where coordinates are in feet or meter rather than degrees latitude and longitude.
+
+```{r}
+eu_countries_transformed <- eu_countries %>%
+  st_transform(crs = north_pole_eu)
+
+ggplot(eu_countries_transformed)+
+  geom_sf()+
+  coord_sf()+
+  theme_bw()
+```
+
+
+## Mapping Variables
+
+### Chloropleth Map:
+
+Map of Europe that shows GDP estimates by country.
+
+```{r}
+ggplot(eu_countries_transformed, aes(fill = gdp_md_est)) +
+  geom_sf(color = NA) +
+  scale_fill_viridis_c(option="inferno",
+    name = "GDP Estimates by Country",
+    breaks = seq(0, 3000000, by = 500000),
+    labels = formatC(seq(0, 3000000, by = 500000), 
+                     big.mark = ",", format = "f", digits = 0)) +
+  theme_map() +
+  theme(legend.background = element_blank())
+```
+
+
+### Continuous Cartogram:
+
+Map of Europe that shows GDP estimates by country. Shape is distorted because there are no gaps in between the countries, as the area is distorted to be more proportionate to the countries' population estimate. 
+
+```{r, message=FALSE}
+GDP_cartogram_cont <- eu_countries_transformed %>%
+  cartogram_cont("pop_est")
+
+ggplot(GDP_cartogram_cont, aes(fill = gdp_md_est)) +
+  geom_sf(color = NA) +
+  scale_fill_viridis_c(option="plasma",
+    name = "Country GDP Estimate",
+    breaks = seq(0, 3000000, by = 500000),
+    labels = formatC(seq(0, 3000000, by = 500000), 
+                     big.mark = ",", format = "f", digits = 0)) +
+  theme_map() +
+  theme(legend.background = element_blank())
+```
+
+
+### Non-Continuous Cartogram:
+
+Map of Europe that shows GDP estimates by country. The sizes of countries are distorted to be more proportionate to their population estimates. However, shape and the relative position of countries are maintained. I cannot figure out how to make this map appear larger without excluding some countries. 
+
+```{r}
+GDP_cartogram_ncont <- eu_countries_transformed %>%
+  cartogram_ncont("pop_est")
+
+ggplot(GDP_cartogram_ncont, aes(fill = gdp_md_est)) +
+  geom_sf(color = NA) +
+  scale_fill_viridis_c(
+    name = "Country GDP Estimate",
+    breaks = seq(0, 3000000, by = 500000),
+    labels = formatC(seq(0, 3000000, by = 500000), 
+                     big.mark = ",", format = "f", digits = 0)) +
+  theme_map() +
+  theme(legend.background = element_blank())
+```
+
+
+### Dorling Cartogram:
+
+Map of Europe that shows GDP estimates by country. All countries are represented as circles, larger circles represent a larger population estimate. Color indicate GDP estimates for each country. 
+
+```{r}
+GDP_cartogram_dorling <- eu_countries_transformed %>%
+  cartogram_dorling("pop_est")
+
+ggplot(GDP_cartogram_dorling, aes(fill = gdp_md_est)) +
+  geom_sf(color = NA) +
+  scale_fill_viridis_c(
+    name = "Country GDP Estimate",
+    breaks = seq(0, 3000000, by = 500000),
+    labels = formatC(seq(0, 3000000, by = 500000), 
+                     big.mark = ",", format = "f", digits = 0)) +
+  theme_map() +
+  theme(legend.background = element_blank(),legend.position = "left")
+```
+
+
+### Proportional Symbol Map:
+
+Map of Europe that shows GDP estimates by country. Larger circle size indicates a higher GDP estimate for the country. 
+
+```{r}
+GDP_centeroids <- eu_countries_transformed %>%
+  st_centroid()
+
+ggplot(eu_countries_transformed)+
+  geom_sf(fill = NA, color= "blue")+
+  geom_sf(data = GDP_centeroids,
+          aes(size = gdp_md_est),
+          alpha = 0.6, color = "purple")+
+  scale_size_continuous(name = "Country GDP Estimate",
+    breaks = seq(0, 3000000, by = 500000),
+    labels = formatC(seq(0, 3000000, by = 500000), 
+                     big.mark = ",", format = "f", digits = 0)) +
+  theme_void()
+```
+
+All of the dots in the Proportional Symbol Map are squished together because of Russia's area, so I tried sorting the names to exclude Russia from the map to see if GDP will be more clear. 
+
+```{r}
+eu_countries_noRussia <- eu_countries %>%
+  filter(name_sort != "Russian Federation") 
+
+eu_countries_noRussia_transformed <- eu_countries_noRussia %>%
+  st_transform(crs = north_pole_eu)
+
+GDP_centeroids_1 <- eu_countries_noRussia_transformed %>%
+  st_centroid()
+
+ggplot(eu_countries_noRussia_transformed)+
+  geom_sf(fill = NA, color= "blue")+
+  geom_sf(data = GDP_centeroids_1,
+          aes(size = gdp_md_est),
+          alpha = 0.6, color = "purple")+
+  scale_size_continuous(name = "Country GDP Estimate",
+    breaks = seq(0, 3000000, by = 500000),
+    labels = formatC(seq(0, 3000000, by = 500000), 
+                     big.mark = ",", format = "f", digits = 0)) +
+  theme_void()
+
+```
+
