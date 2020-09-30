@@ -1,0 +1,329 @@
+---
+title: "Creative Assignment 3"
+author: "Jocelyn Tsai"
+date: "9/27/2020"
+output:
+  html_document:
+    theme: yeti
+    highlight: haddock
+    toc: true
+    toc_float: true
+---
+
+```{r, message = FALSE}
+library(sf)
+library(tidyverse)
+library(ggthemes)
+library(ggspatial)
+library(units)
+library(nngeo)
+```
+
+## Datasets and projection
+
+The four datasets that I am using from Boston Open Data portal are:
+
+1. Zoning district boundaries for the City of Boston (polygon)
+2. Open spaces (polygon)
+3. Boston Public Schools for the school year 2018-2019 (points)
+4. Wicked Free Wi-Fi, Boston's outdoor wireless network (points)
+
+```{r}
+zoning_dist <- st_read("http://bostonopendata-boston.opendata.arcgis.com/datasets/eebd3daed05a45678894db30d9bf0cfb_0.kml?outSR=%7B%22latestWkid%22%3A2249%2C%22wkid%22%3A102686%7D",
+                       quiet = TRUE)
+
+open_space <- st_read("http://bostonopendata-boston.opendata.arcgis.com/datasets/2868d370c55d4d458d4ae2224ef8cddd_7.kml",
+                      quiet = TRUE)
+
+pub_schools <- st_read("http://bostonopendata-boston.opendata.arcgis.com/datasets/1d9509a8b2fd485d9ad471ba2fdb1f90_0.kml?outSR=%7B%22latestWkid%22%3A2249%2C%22wkid%22%3A102686%7D",
+                       quiet = TRUE)
+
+free_wifi <- st_read("http://bostonopendata-boston.opendata.arcgis.com/datasets/4b803745fedd4e88861967d16a1e07fb_0.kml?outSR=%7B%22latestWkid%22%3A3857%2C%22wkid%22%3A102100%7D",
+                     quiet =TRUE)
+```
+
+
+I am transforming my spatial data onto the NAD83(HARN) / Massachusetts Mainland projected coordinate system from https://spatialreference.org/ref/epsg/2805/
+
+```{r}
+MA_mainland <- "+proj=lcc +lat_1=42.68333333333333 +lat_2=41.71666666666667 +lat_0=41 +lon_0=-71.5 +x_0=200000 +y_0=750000 +ellps=GRS80 +units=m +no_defs"
+
+zoning_dist <- zoning_dist %>%
+  st_transform(MA_mainland)
+
+open_space <- open_space %>%
+  st_transform(MA_mainland)
+
+pub_schools <- pub_schools %>%
+  st_transform(MA_mainland)
+
+free_wifi <- free_wifi %>%
+  st_transform(MA_mainland)
+```
+
+Here is a map of all the data layers:
+
+```{r}
+ggplot() +
+  geom_sf(data = zoning_dist, fill = NA, color = "gray")+
+  geom_sf(data = open_space, fill = "lightgreen", color = "lightgreen") +
+  geom_sf(data = pub_schools, size = 0.5) +
+  geom_sf(data= free_wifi, fill = "blue", color = "blue", size = 0.1)+
+  theme_map()+
+  annotation_scale()
+```
+
+
+## Creating a Buffer
+
+### Number of public schools within 200 meters of free Wifi locations in Boston
+
+First create the 200m buffer around free WiFi:
+
+```{r}
+wifi_buffer <- st_buffer(free_wifi, dist = 200) %>%
+  st_union()
+
+ggplot(wifi_buffer) +
+  geom_sf() +
+  theme_map()
+```
+
+Subsetting points with a polygon:
+Now create a dataframe that only includes the public schools that are within the 200m free WiFi buffer. Then map the subset of public schools by drawing them on top of the free WiFi buffer. 
+
+```{r}
+schools_wifi <- pub_schools[wifi_buffer,]
+  
+ggplot(wifi_buffer) +
+  geom_sf(fill= "lightblue", color= NA) +
+  geom_sf(data = schools_wifi, 
+          color = "black", 
+          size = 0.5) +
+  theme_map()
+```
+
+
+I joined my two public school dataframes by using the st_join function. For any schools that are in the pub_schools dataset, but not in schools_wifi, there will be an NA value for the variables Name.y and Description.y. Based on which values of Name.y are NA, I can create a binary variable that indicates whether each school is near a free WiFi location.
+
+```{r}
+pub_schools <- pub_schools %>%
+  st_join(schools_wifi) %>%
+  mutate(near_wifi = !is.na(Name.y))
+```
+
+Calculate how many public schools are within 200 meters of free WiFi:
+
+```{r}
+num_schools_near_wifi <- sum(pub_schools$near_wifi)
+
+num_schools_near_wifi
+```
+
+Calculate the percentage of public schools that are within 200 meters of free WiFi:
+results show that 25% of public schools are in close proximity to free outdoor Wifi. 
+
+```{r}
+num_schools <- length(pub_schools$near_wifi)
+
+pct_school_near_wifi <- num_schools_near_wifi / num_schools
+
+pct_school_near_wifi
+```
+
+Map of Boston public schools by distance (within or not within 200 meters) to free wifi
+
+```{r}
+left_side  <- st_bbox(pub_schools)$xmin
+right_side <- st_bbox(pub_schools)$xmax
+top_side <- st_bbox(pub_schools)$ymax
+bottom_side <- st_bbox(pub_schools)$ymin
+
+ggplot() +
+  geom_sf(data = pub_schools, size = 0.7,
+          aes(color = near_wifi)) +
+  scale_color_manual(values = c("lightblue", "darkblue"),
+          name = "Boston public schools\nby distance to free WiFi", 
+          labels = c("No free WiFi within 200 m",
+                     "Free WiFi within 200 m")) +
+  annotation_scale(location = "br") +
+  annotation_north_arrow(location = "tr",
+                         style = north_arrow_minimal()) +
+  annotate(geom = "text", x = left_side, 
+           y = top_side, 
+           label = paste("Of the ", 
+                         prettyNum(num_schools, big.mark = ","),
+                         " public schools in Boston,\n ", 
+                         prettyNum(num_schools_near_wifi, big.mark = ","),
+                         " (", 
+                         prettyNum(100*pct_school_near_wifi, digits = 0),
+                         "%) are within 200 meters of free WiFi.",
+                         sep = ""),
+           hjust = 0, vjust = 0.8, size = 3) +
+  theme_map() +
+  theme(panel.background = element_rect(fill = "beige"),
+        legend.background = element_rect(fill = alpha("white", 0.3), 
+                                         color = "gray", size = 0.3))
+```
+
+
+## Counting points in a polygon
+
+### Number of public schools in each zoning district
+
+To find out how many public schools are in each Boston zoning district, I used the st_covers() function to return a list of the public schools in each district, then the lengths () function to get the number of schools in each district. I then used mutate() to add a new column "num_schools_in_dist" to my zoning_dist dataframe. 
+
+```{r}
+zoning_dist <- zoning_dist %>%
+  mutate(num_schools_in_dist = lengths(st_covers(zoning_dist, pub_schools)))
+```
+
+Here is the chloropleth map showing Boston zoning districts by the number of public schools in each district. 
+
+```{r}
+ggplot(zoning_dist) +
+  geom_sf(color = NA, 
+          aes(fill = num_schools_in_dist)) +
+  scale_fill_viridis_c(name = "Boston zoning districts\nby number of public schools\n",
+                       breaks = breaks <- seq(0, 25, by = 5),
+                       labels = paste(prettyNum(breaks),
+                                      "public schools"),
+                       option = "plasma") +
+  annotation_scale(location = "bl") +
+  annotation_north_arrow(location = "tr",
+                         style = north_arrow_minimal()) +
+theme_map() +
+  theme(legend.position = c(0.7, 0), legend.background = element_rect(fill = alpha("white", 0.5), color = "gray"))
+```
+
+
+### Number of free wifi spots in each Boston open space
+
+```{r}
+open_space <- open_space %>%
+  mutate(num_wifi_in_openspace = lengths(st_covers(open_space, free_wifi)))
+```
+
+Chloropleth map showing Boston open spaces by the number of free wifi location in each of the open space. 
+
+```{r}
+ggplot(open_space) +
+  geom_sf(color = NA, 
+          aes(fill = num_wifi_in_openspace)) +
+  scale_fill_viridis_c(name = "Boston open space\nby number of free wifi spots\n",
+                       breaks = breaks <- seq(0, 6, by = 1),
+                       option = "plasma") +
+  annotation_scale(location = "bl") +
+  annotation_north_arrow(location = "tr",
+                         style = north_arrow_minimal()) +
+theme_map() +
+  theme(legend.position = c(0.7, 0), legend.background = element_rect(fill = alpha("white", 0.5), color = "gray"))
+```
+
+
+## Calculating areas and densities
+
+### Density of free WiFi locations within each zoning district in Boston
+
+To find the density of free wifi spots within each zoning district (the number of wifi spots per square kilometer), I will first find the area of each zoning district by using the st_area() function. set_units() specifies the unit (in this case I will be converting from square m to square km) since the coordinate system I am using is in meters. The function as.numeric() will convert the result to regular numbers. 
+
+```{r}
+zoning_dist <- zoning_dist %>%
+  mutate(area = set_units(st_area(zoning_dist), km^2)) %>%
+  mutate(wifi_dens_in_dist = as.numeric(num_schools_in_dist / area))
+```
+
+```{r}
+ggplot(zoning_dist) +
+  geom_sf(color = NA, 
+          aes(fill = wifi_dens_in_dist)) +
+    scale_fill_viridis_c(name = "Boston zoning districts\nby free WiFi density",
+                       breaks = breaks <- seq(0, 25, by = 5),
+                       labels = paste(prettyNum(breaks, big.mark = ","),
+                                      "wifi locations per square km"),
+                       option = "plasma") +
+  annotation_scale(location = "br") +
+  annotation_north_arrow(location = "tl",
+                         style = north_arrow_minimal()) +
+theme_map() +
+  theme(legend.position = "right",
+    legend.background = element_rect(fill = alpha("white", 0.5), 
+                                         color = "gray"))
+```
+
+
+## Finding the closest point
+
+### Distance of each public school to a free wifi location 
+
+The function st_nn() returns the row number in the public school dataframe of the nearest free wifi location and if I add returnDist=TRUE, it returns the distance to the closest wifi location. I then used st_nn()$dist to get the distances. 
+
+```{r, message=FALSE, results='hide'}
+pub_schools <- pub_schools %>%
+  mutate(wifi_dist = st_nn(pub_schools, free_wifi, 
+                           returnDist = TRUE)$dist) %>%
+  mutate(wifi_dist = as.numeric(wifi_dist))
+```
+
+Calculate the average distance (meters) from a public school to the nearest free wifi location:
+```{r}
+avg_wifi_dist_school <- mean(pub_schools$wifi_dist)
+avg_wifi_dist_school
+```
+
+```{r}
+ggplot() +
+  geom_sf(data = pub_schools, size = 0.5,
+          aes(color = wifi_dist)) +
+  scale_color_viridis_c(name = 
+                          "Boston public schools by\ndistance to free WiFi (m)") +
+  annotation_scale(location = "bl") +
+  annotation_north_arrow(location = "tr",
+                         style = north_arrow_minimal()) +
+  annotate(geom = "text", x = left_side + 300, 
+           y = top_side - 550, 
+           label = paste("On average, a Boston public school\nis ", 
+                         prettyNum(avg_wifi_dist_school, digits = 4),
+                         " meters from a free wifi location.",
+                         sep = ""),
+           hjust = 0, vjust = 0, size = 3) +
+  theme_map() +
+  theme(legend.position = c(0.8, 0), legend.background = element_rect(fill = alpha("white", 0.5), color = "gray"))
+```
+
+
+### Distance of each open space to a public school 
+
+```{r, message=FALSE, results='hide'}
+open_space <- open_space %>%
+  mutate(school_dist = st_nn(open_space, pub_schools, 
+                           returnDist = TRUE)$dist) %>%
+  mutate(school_dist = as.numeric(school_dist))
+```
+
+```{r}
+avg_school_dist_openspace <- mean(open_space$school_dist)
+avg_school_dist_openspace
+```
+
+```{r}
+ggplot() +
+  geom_sf(data = open_space, size = 0.5,
+          aes(color = school_dist)) +
+  scale_color_viridis_c(name = 
+                          "Boston open space by\ndistance to public school(m)") +
+  annotation_scale(location = "bl") +
+  annotation_north_arrow(location = "tr",
+                         style = north_arrow_minimal()) +
+  annotate(geom = "text", x = left_side + 300, 
+           y = top_side - 550, 
+           label = paste("On average, a Boston open space\nis ", 
+                         prettyNum(avg_school_dist_openspace, digits = 4),
+                         " meters from a public school.",
+                         sep = ""),
+           hjust = 0, vjust = 0, size = 3) +
+  theme_map() +
+  theme(legend.position = c(0.7, 0), legend.background = element_rect(fill = alpha("white", 0.5), color = "gray"))
+```
+
+
