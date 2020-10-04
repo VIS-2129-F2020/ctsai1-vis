@@ -2,7 +2,12 @@
 title: "Creative Assignment 4"
 author: "Jocelyn Tsai"
 date: "10/2/2020"
-output: html_document
+output: 
+  html_document:
+    theme: yeti
+    highlight: haddock
+    toc: true
+    toc_float: true
 ---
 ```{r, message=FALSE}
 library(osmdata)
@@ -12,6 +17,8 @@ library(sf)
 library(ggthemes)
 library(ggspatial)
 ```
+
+## Load locations for emergency shelters
 
 For this assignment, I am interested in looking at the walksheds and drivesheds to Emergency Shelters in Cambridge. It is important for Cambridge residents to be able to quickly access these shelters during emergency situations.
 
@@ -24,6 +31,16 @@ Reading the shapefile that was saved to my computer:
 emergency_shelters <- st_read(
   "data_downloads/PUBLICSAFETY_EmergencyShelters.shp/PUBLICSAFETY_EmergencyShelters.shp")
 ```
+
+The data that I downloaded was originally in NAD 1983 StatePlane Massachusetts Mainland coordinate system, I have to transform it to latitude/longitude first using WGS84 (EPSG:4326) bounds or else I will run into en error when trying to make isochrones later. 
+
+```{r}
+emergency_shelters <- emergency_shelters %>%
+  st_transform(crs=4326)
+```
+
+
+## Get street network data
 
 The opq function creates a call to the open street map server to download street network data. bbox (bounding box), is like the search bar on google maps (typing in general area name is fine, it doesn't have to be exact). osmdata_xml will create a file with the information about the street network, and it will save it to the default directory created.
 
@@ -54,6 +71,8 @@ ggplot(cambridge_streets) +
   geom_sf() 
 ```
 
+## Set up Open Trip Planner
+
 Download a Java utility called otp.jar and save it to the OPT folder (only need to run this code chunk once):
 
 ```{r}
@@ -82,12 +101,11 @@ otpcon <- otp_connect()
 ```
 
 
+## Create isochrones 
 
-Create isochrones 
+I created isochrones for areas within an 8 minute walk and an 8 minute drive of emergency shelters in Cambridge using the otp_isochrone function. I then used the rbind function to combine these sets of polygons (drive, walk) into one dataframe. otp_stop() function stops the Open Trip Planner application from running.
 
-I am creating isochrones for areas within an 8 minute walk and an 8 minute drive: 
-
-```{r}
+```{r, message=FALSE, results='hide'}
 iso_8min_walk <- 
   otp_isochrone(otpcon = otpcon, fromPlace = emergency_shelters, 
                 mode = "WALK", cutoffSec = 480) %>%
@@ -105,5 +123,181 @@ iso_all_modes <- rbind(iso_8min_walk, iso_8min_drive)
 otp_stop()
 ```
 
+## Map isochrones
 
+### Draw the walk/drive isochrones using the street network as a basemap
+
+```{r}
+left_side <- st_bbox(iso_all_modes)$xmin
+right_side <- st_bbox(iso_all_modes)$xmax
+bottom_side <- st_bbox(iso_all_modes)$ymin
+top_side <- st_bbox(iso_all_modes)$ymax
+
+ggplot(iso_all_modes) +
+  geom_sf(data = cambridge_streets, color = "gray") +
+  geom_sf(aes(fill = mode), alpha = 0.3) +
+  geom_sf(data = emergency_shelters) +
+  coord_sf(xlim = c(left_side, right_side), 
+           ylim = c(bottom_side, top_side), expand = FALSE) +
+  scale_fill_viridis_d(name = "Area that is reachable within 8 minutes",
+                       labels = c("By Driving", "By Walking"),
+                       option = "plasma") +
+  annotation_scale(location = "br")+
+  annotation_north_arrow(location = "tr", style= north_arrow_minimal())+
+  theme_map()
+```
+
+
+### Draw the walk/drive isochrones using OpenStreetMap as a basemap
+
+Typing rosm::osm.types() into the console shows all other basemap options. 
+
+1. default 
+
+```{r}
+ggplot(iso_all_modes) +
+  annotation_map_tile(zoomin = 0, progress = "none") +
+  geom_sf(aes(fill = mode), alpha = 0.3) +
+  geom_sf(data = emergency_shelters) +
+  coord_sf(xlim = c(left_side, right_side), 
+           ylim = c(bottom_side, top_side), expand = FALSE) +
+  scale_fill_viridis_d(name = "Area that is reachable within 8 minutes",
+                       labels = c("By Driving", "By Walking"),
+                       option = "magma") +
+  annotation_scale(location = "br")+
+  annotation_north_arrow(location = "tr", style= north_arrow_minimal())+
+  theme_map() +
+  labs(caption = "Basemap Copyright OpenStreetMap contributors")
+```
+
+2. hillshade
+
+```{r}
+ggplot(iso_all_modes) +
+  annotation_map_tile(zoomin = 0, type= "hillshade", progress = "none") +
+  geom_sf(aes(fill = mode), alpha = 0.3) +
+  geom_sf(data = emergency_shelters) +
+  coord_sf(xlim = c(left_side, right_side), 
+           ylim = c(bottom_side, top_side), expand = FALSE) +
+  scale_fill_viridis_d(name = "Area that is reachable within 8 minutes",
+                       labels = c("By Driving", "By Walking"),
+                       option = "plasma") +
+  annotation_scale(location = "br")+
+  annotation_north_arrow(location = "tr", style= north_arrow_minimal())+
+  theme_map() +
+  labs(caption = "Basemap Copyright OpenStreetMap contributors")
+```
+
+3. cartodark
+
+```{r}
+ggplot(iso_all_modes) +
+  annotation_map_tile(zoomin = 0, type= "cartodark", progress = "none") +
+  geom_sf(aes(fill = mode), alpha = 0.3) +
+  geom_sf(data = emergency_shelters) +
+  coord_sf(xlim = c(left_side, right_side), 
+           ylim = c(bottom_side, top_side), expand = FALSE) +
+  scale_fill_viridis_d(name = "Area that is reachable within 8 minutes",
+                       labels = c("By Driving", "By Walking")) +
+  annotation_scale(location = "br")+
+  annotation_north_arrow(location = "tr", style= north_arrow_minimal())+
+  theme_map() +
+  labs(caption = "Basemap Copyright OpenStreetMap contributors")
+```
+
+4. cartolight
+
+```{r}
+ggplot(iso_all_modes) +
+  annotation_map_tile(zoomin = 0, type= "cartolight", progress = "none") +
+  geom_sf(aes(fill = mode), alpha = 0.3) +
+  geom_sf(data = emergency_shelters) +
+  coord_sf(xlim = c(left_side, right_side), 
+           ylim = c(bottom_side, top_side), expand = FALSE) +
+  scale_fill_viridis_d(name = "Area that is reachable within 8 minutes",
+                       labels = c("By Driving", "By Walking"),
+                       option = "plasma") +
+  annotation_scale(location = "br")+
+  annotation_north_arrow(location = "tr", style= north_arrow_minimal())+
+  theme_map() +
+  labs(caption = "Basemap Copyright OpenStreetMap contributors")
+```
+
+5. thunderforestoutdoors
+
+```{r}
+ggplot(iso_all_modes) +
+  annotation_map_tile(zoomin = 0, type= "thunderforestoutdoors", progress = "none") +
+  geom_sf(aes(fill = mode), alpha = 0.3) +
+  geom_sf(data = emergency_shelters) +
+  coord_sf(xlim = c(left_side, right_side), 
+           ylim = c(bottom_side, top_side), expand = FALSE) +
+  scale_fill_viridis_d(name = "Area that is reachable within 8 minutes",
+                       labels = c("By Driving", "By Walking"),
+                       option = "plasma") +
+  annotation_scale(location = "br")+
+  annotation_north_arrow(location = "tr", style= north_arrow_minimal())+
+  theme_map() +
+  labs(caption = "Basemap Copyright OpenStreetMap contributors")
+```
+
+6. osmgrayscale
+
+```{r}
+ggplot(iso_all_modes) +
+  annotation_map_tile(zoomin = 0, type= "osmgrayscale", progress = "none") +
+  geom_sf(aes(fill = mode), alpha = 0.3) +
+  geom_sf(data = emergency_shelters) +
+  coord_sf(xlim = c(left_side, right_side), 
+           ylim = c(bottom_side, top_side), expand = FALSE) +
+  scale_fill_viridis_d(name = "Area that is reachable within 8 minutes",
+                       labels = c("By Driving", "By Walking"),
+                       option = "plasma") +
+  annotation_scale(location = "br")+
+  annotation_north_arrow(location = "tr", style= north_arrow_minimal())+
+  theme_map() +
+  labs(caption = "Basemap Copyright OpenStreetMap contributors")
+```
+
+7. thunderforestlandscape
+
+```{r}
+ggplot(iso_all_modes) +
+  annotation_map_tile(zoomin = 0, type= "thunderforestlandscape", progress = "none") +
+  geom_sf(aes(fill = mode), alpha = 0.3) +
+  geom_sf(data = emergency_shelters) +
+  coord_sf(xlim = c(left_side, right_side), 
+           ylim = c(bottom_side, top_side), expand = FALSE) +
+  scale_fill_viridis_d(name = "Area that is reachable within 8 minutes",
+                       labels = c("By Driving", "By Walking")) +
+  annotation_scale(location = "br")+
+  annotation_north_arrow(location = "tr", style= north_arrow_minimal())+
+  theme_map() +
+  labs(caption = "Basemap Copyright OpenStreetMap contributors")
+```
+
+
+## Isochrone areas
+
+To calculate the area of each isochrone, I used the st_area() function. The pivot_wider() function then creates a seperate column for each mode of transportation (drive or walk), and each row represents a location with both the drive and walk isochrones instead of having each row in the dataframe just containing either one of the isochrones. For labels, I used breaks/1000000 to convert meters square to kilometer square. 
+
+```{r}
+iso_areas <- iso_all_modes %>%
+  mutate(area = st_area(iso_all_modes)) %>%
+  st_set_geometry(NULL) %>%
+  pivot_wider(names_from = mode, values_from = area) 
+
+ggplot(iso_areas, 
+       aes(x = as.numeric(walk), y = as.numeric(drive))) +
+  geom_point() +
+  scale_x_continuous(name = 
+            "Area within an 8 minute walking distance\nof an emergency shelter (square km)",
+            breaks = breaks <- seq(10000, 500000, by = 50000),
+            labels = breaks / 1000000) +
+  scale_y_continuous(name = 
+            "Area within an 8 minute driving distance\nof an emergency shelter (square km)",
+            breaks = breaks <- seq(0, 3000000, by = 500000),
+            labels = breaks / 1000000)+
+  theme_economist()
+```
 
