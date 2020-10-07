@@ -277,7 +277,7 @@ ggplot(iso_all_modes) +
 ```
 
 
-## Isochrone areas
+## Isochrone areas: scatter plot
 
 To calculate the area of each isochrone, I used the st_area() function. The pivot_wider() function then creates a seperate column for each mode of transportation (drive or walk), and each row represents a location with both the drive and walk isochrones instead of having each row in the dataframe just containing either one of the isochrones. For labels, I used breaks/1000000 to convert meters square to kilometer square. 
 
@@ -300,4 +300,23 @@ ggplot(iso_areas,
             labels = breaks / 1000000)+
   theme_economist()
 ```
+
+## Isochrone areas: scatter plot with polar coordinate system
+
+```{r, message=FALSE}
+ggplot(iso_areas, 
+       aes(x = as.numeric(walk),
+           y = as.numeric(drive))) +
+  geom_point(alpha = 0.8, size = 1) +
+  stat_smooth(color = "lightblue", linetype = 1, size = 0.8) +
+  scale_x_continuous(name = "Area within an 8 minute walking distance\nof an emergency shelter (square km)",
+                     breaks = breaks <- seq(10000, 500000, by = 50000),
+                    labels = breaks / 1000000) +
+  scale_y_continuous(name = "Area within an 8 minute driving distance\nof an emergency shelter (square km)",
+                     breaks = breaks <- seq(0, 3000000, by = 500000),
+            labels = breaks / 1000000)+
+  coord_polar(theta = "x") +
+  theme_minimal() 
+```
+
 
