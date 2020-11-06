@@ -44,7 +44,7 @@ social_vulnerability_1 <- na.omit(social_vulnerability)
 
 ## Map 1: chloropleth map
 
-```{r, message=FALSE, results='hide'}
+```{r, message=FALSE}
 colorbins <- colorBin(palette = "Reds",
                    domain = social_vulnerability_1$ppl_disability,
                    na.color = "#00000000",
@@ -83,7 +83,7 @@ Map_1
 ## Map 2: Points map using area centroids
 
 
-```{r, message=FALSE, results='hide'}
+```{r, message=FALSE}
 MA_state_plane <- "+proj=lcc +lat_1=41.71666666666667 +lat_2=42.68333333333333 +lat_0=41 +lon_0=-71.5 +x_0=200000 +y_0=750000 +ellps=GRS80 +units=m +no_defs "
 
 WGS84 <- "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
@@ -151,7 +151,7 @@ idw_interp <- interpolate(boston_raster, gs)
 idw_interp_clip <- mask(idw_interp, nhood_poly_sp)
 ```
 
-```{r, message=FALSE, results='hide'}
+```{r, message=FALSE}
 leaflet(nhood_points) %>%
   addProviderTiles("Esri.WorldGrayCanvas") %>%
   addRasterImage(idw_interp_clip, colors = colorbins(social_vulnerability_1$ppl_disability), opacity = 0.8) %>% 
