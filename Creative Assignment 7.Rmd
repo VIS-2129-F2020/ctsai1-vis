@@ -92,7 +92,7 @@ nhood_points <- st_centroid(
   st_transform(social_vulnerability_1, crs = MA_state_plane)) %>%
   st_transform(WGS84)
 
-leaflet(nhood_points, 
+Map_2 <- leaflet(nhood_points, 
                  options=leafletOptions(minZoom = 10, maxZoom = 16)) %>%
   addProviderTiles("Esri.WorldGrayCanvas") %>%
   
@@ -114,8 +114,10 @@ leaflet(nhood_points,
             values = social_vulnerability_1$ppl_disability,
             opacity = 1,
             title = "Percentage of population with disability")
-
+Map_2
 ```
+
+
 
  
 ## Map 3: Interpolation map 
@@ -152,7 +154,7 @@ idw_interp_clip <- mask(idw_interp, nhood_poly_sp)
 ```
 
 ```{r, message=FALSE}
-leaflet(nhood_points) %>%
+Map_3 <- leaflet(nhood_points) %>%
   addProviderTiles("Esri.WorldGrayCanvas") %>%
   addRasterImage(idw_interp_clip, colors = colorbins(social_vulnerability_1$ppl_disability), opacity = 0.8) %>% 
 
@@ -169,6 +171,19 @@ leaflet(nhood_points) %>%
             values = social_vulnerability_1$ppl_disability,
             opacity = 1,
             title = "Percentage of population with disability")
+Map_3
+```
+
+```{r}
+saveWidget(Map_1, file = "disability_chloropleth.html")
+```
+
+```{r}
+saveWidget(Map_2, file = "disability_centroid.html")
+```
+
+```{r}
+saveWidget(Map_3, file = "disability_interpolate.html")
 ```
 
 ## Discussion 
